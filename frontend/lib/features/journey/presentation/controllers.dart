@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../data/journey_repository.dart';
+import '../data/journey_repository.dart';
 import '../../../core/di/providers.dart';
 import '../domain/models.dart';
 
