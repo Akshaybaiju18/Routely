@@ -84,6 +84,10 @@ class Segment {
   final int? stopsCount;
   final double? fare;
   final String? stopName;
+  final double? startLat;
+  final double? startLng;
+  final double? endLat;
+  final double? endLng;
 
   Segment({
     required this.type,
@@ -99,6 +103,10 @@ class Segment {
     this.stopsCount,
     this.fare,
     this.stopName,
+    this.startLat,
+    this.startLng,
+    this.endLat,
+    this.endLng,
   });
 
   factory Segment.fromJson(Map<String, dynamic> json) {
@@ -116,6 +124,10 @@ class Segment {
       stopsCount: json['stops_count'] as int?,
       fare: json['fare'] != null ? (json['fare'] as num).toDouble() : null,
       stopName: json['stop_name'] as String?,
+      startLat: json['start_lat'] != null ? (json['start_lat'] as num).toDouble() : null,
+      startLng: json['start_lng'] != null ? (json['start_lng'] as num).toDouble() : null,
+      endLat: json['end_lat'] != null ? (json['end_lat'] as num).toDouble() : null,
+      endLng: json['end_lng'] != null ? (json['end_lng'] as num).toDouble() : null,
     );
   }
 
@@ -134,6 +146,10 @@ class Segment {
       'stops_count': stopsCount,
       'fare': fare,
       'stop_name': stopName,
+      'start_lat': startLat,
+      'start_lng': startLng,
+      'end_lat': endLat,
+      'end_lng': endLng,
     };
   }
 }

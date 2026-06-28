@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import '../controllers.dart';
 import '../../domain/models.dart';
+import '../../domain/location_point.dart';
 import 'journey_detail_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -21,10 +23,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _showSourceSuggestions = false;
   bool _showDestSuggestions = false;
 
+  Future<void> _useCurrentLocationForSource() async {
+    setState(() {
+      _showSourceSuggestions = false;
+      _sourceController.text = 'Locating...';
+    });
+    
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw 'Location permissions are denied';
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw 'Location permissions are permanently denied';
+      }
+      
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      
+      final currentLoc = LocationPoint(
+        name: 'My Current Location',
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      
+      ref.read(sourceLocationProvider.notifier).state = currentLoc;
+      _sourceController.text = 'My Current Location';
+      setState(() {
+        _sourceQuery = '';
+      });
+    } catch (e) {
+      ref.read(sourceLocationProvider.notifier).state = null;
+      _sourceController.text = '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not get location: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final sourceStop = ref.watch(sourceStopProvider);
-    final destStop = ref.watch(destinationStopProvider);
+    final sourceLoc = ref.watch(sourceLocationProvider);
+    final destLoc = ref.watch(destinationLocationProvider);
     final journeyAsync = ref.watch(journeyProvider);
 
     return Scaffold(
@@ -59,13 +103,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   icon: const Icon(Icons.clear),
                                   onPressed: () {
                                     _sourceController.clear();
-                                    ref.read(sourceStopProvider.notifier).state = null;
+                                    ref.read(sourceLocationProvider.notifier).state = null;
                                     setState(() { _sourceQuery = ''; });
                                   },
                                 )
                               : null,
                           border: const OutlineInputBorder(),
                         ),
+                        onTap: () {
+                          setState(() {
+                            _showSourceSuggestions = true;
+                            _showDestSuggestions = false;
+                          });
+                        },
                         onChanged: (val) {
                           setState(() {
                             _sourceQuery = val;
@@ -75,12 +125,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                       
                       // Source Suggestions
-                      if (_showSourceSuggestions && _sourceQuery.isNotEmpty)
+                      if (_showSourceSuggestions)
                         _buildSuggestionsList(
                           query: _sourceQuery,
-                          onSelect: (stop) {
-                            ref.read(sourceStopProvider.notifier).state = stop;
-                            _sourceController.text = stop.name;
+                          isSource: true,
+                          onSelect: (loc) {
+                            ref.read(sourceLocationProvider.notifier).state = loc;
+                            _sourceController.text = loc.name;
                             setState(() {
                               _showSourceSuggestions = false;
                             });
@@ -100,13 +151,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   icon: const Icon(Icons.clear),
                                   onPressed: () {
                                     _destController.clear();
-                                    ref.read(destinationStopProvider.notifier).state = null;
+                                    ref.read(destinationLocationProvider.notifier).state = null;
                                     setState(() { _destQuery = ''; });
                                   },
                                 )
                               : null,
                           border: const OutlineInputBorder(),
                         ),
+                        onTap: () {
+                          setState(() {
+                            _showDestSuggestions = true;
+                            _showSourceSuggestions = false;
+                          });
+                        },
                         onChanged: (val) {
                           setState(() {
                             _destQuery = val;
@@ -116,12 +173,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                       
                       // Destination Suggestions
-                      if (_showDestSuggestions && _destQuery.isNotEmpty)
+                      if (_showDestSuggestions)
                         _buildSuggestionsList(
                           query: _destQuery,
-                          onSelect: (stop) {
-                            ref.read(destinationStopProvider.notifier).state = stop;
-                            _destController.text = stop.name;
+                          isSource: false,
+                          onSelect: (loc) {
+                            ref.read(destinationLocationProvider.notifier).state = loc;
+                            _destController.text = loc.name;
                             setState(() {
                               _showDestSuggestions = false;
                             });
@@ -135,7 +193,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(height: 24),
               
               // Journey Options Heading
-              if (sourceStop != null && destStop != null) ...[
+              if (sourceLoc != null && destLoc != null) ...[
                 const Text(
                   'Recommended Routes',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal),
@@ -155,7 +213,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: Padding(
                           padding: EdgeInsets.all(16.0),
                           child: Text(
-                            'No bus routes found connecting these coordinates. Seeding test routes might help!',
+                            'No bus routes found connecting these coordinates. Make sure the stops are seeded in the database!',
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -205,7 +263,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Search for bus stops to plan your route. Try typing "Infopark" or "Kaloor".',
+                          'Type place names from OpenStreetMap Nominatim, or use your GPS location to search routes.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.grey.shade600),
                         ),
@@ -221,36 +279,77 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildSuggestionsList({required String query, required Function(Stop) onSelect}) {
+  Widget _buildSuggestionsList({
+    required String query,
+    required bool isSource,
+    required Function(LocationPoint) onSelect,
+  }) {
+    if (query.trim().isEmpty) {
+      return Container(
+        constraints: const BoxConstraints(maxHeight: 80),
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            if (isSource)
+              ListTile(
+                leading: const Icon(Icons.gps_fixed, color: Colors.teal),
+                title: const Text(
+                  'Use Current Location',
+                  style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),
+                ),
+                onTap: _useCurrentLocationForSource,
+              ),
+          ],
+        ),
+      );
+    }
+
     return Consumer(
       builder: (context, ref, child) {
-        final suggestionsAsync = ref.watch(searchSuggestionsProvider(query));
+        final suggestionsAsync = ref.watch(osmSuggestionsProvider(query));
         return suggestionsAsync.when(
-          data: (stops) {
-            if (stops.isEmpty) {
+          data: (locations) {
+            if (locations.isEmpty) {
               return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8.0),
-                child: Text('No matching stops found.'),
+                padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+                child: Text('No matching locations found.'),
               );
             }
             return Container(
-              constraints: const BoxConstraints(maxHeight: 200),
-              child: ListView.builder(
+              constraints: const BoxConstraints(maxHeight: 250),
+              child: ListView(
                 shrinkWrap: true,
-                itemCount: stops.length,
-                itemBuilder: (context, i) {
-                  final stop = stops[i];
-                  return ListTile(
-                    title: Text(stop.name),
-                    subtitle: Text(stop.landmark ?? stop.city),
+                children: [
+                  if (isSource && query.isEmpty)
+                    ListTile(
+                      leading: const Icon(Icons.gps_fixed, color: Colors.teal),
+                      title: const Text(
+                        'Use Current Location',
+                        style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),
+                      ),
+                      onTap: _useCurrentLocationForSource,
+                    ),
+                  ...locations.map((loc) => ListTile(
+                    leading: const Icon(Icons.location_on_outlined, color: Colors.teal),
+                    title: Text(
+                      loc.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      'Lat: ${loc.latitude.toStringAsFixed(4)}, Lng: ${loc.longitude.toStringAsFixed(4)}',
+                    ),
                     dense: true,
-                    onTap: () => onSelect(stop),
-                  );
-                },
+                    onTap: () => onSelect(loc),
+                  )).toList(),
+                ],
               ),
             );
           },
-          loading: () => const LinearProgressIndicator(),
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: LinearProgressIndicator(),
+          ),
           error: (e, s) => Text('Error: $e'),
         );
       },
@@ -326,7 +425,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const Divider(),
               const SizedBox(height: 8),
               
-              // Bus numbers / summary
               _buildJourneySummaryIcons(option),
             ],
           ),

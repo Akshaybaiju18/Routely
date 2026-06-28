@@ -104,6 +104,10 @@ def find_journeys(source_lat, source_lng, dest_lat, dest_lng, radius_km=1.5):
                                     "to_name": start_stop.name,
                                     "distance_km": round(d_start, 2),
                                     "duration_mins": round(d_start * 12, 1),
+                                    "start_lat": source_lat,
+                                    "start_lng": source_lng,
+                                    "end_lat": start_stop.latitude,
+                                    "end_lng": start_stop.longitude,
                                     "instruction": f"Walk {round(d_start * 1000)}m to {start_stop.name} bus stop."
                                 },
                                 {
@@ -115,6 +119,10 @@ def find_journeys(source_lat, source_lng, dest_lat, dest_lng, radius_km=1.5):
                                     "stops_count": stops_count,
                                     "duration_mins": bus_duration,
                                     "fare": fare,
+                                    "start_lat": start_stop.latitude,
+                                    "start_lng": start_stop.longitude,
+                                    "end_lat": end_stop.latitude,
+                                    "end_lng": end_stop.longitude,
                                     "instruction": f"Board {s_rs.route.board_name} ({s_rs.route.operator}) at {start_stop.name}. Ride {stops_count} stops and alight at {end_stop.name}."
                                 },
                                 {
@@ -123,6 +131,10 @@ def find_journeys(source_lat, source_lng, dest_lat, dest_lng, radius_km=1.5):
                                     "to_name": "Destination Location",
                                     "distance_km": round(d_end, 2),
                                     "duration_mins": round(d_end * 12, 1),
+                                    "start_lat": end_stop.latitude,
+                                    "start_lng": end_stop.longitude,
+                                    "end_lat": dest_lat,
+                                    "end_lng": dest_lng,
                                     "instruction": f"Walk {round(d_end * 1000)}m from {end_stop.name} to destination."
                                 }
                             ]
@@ -200,6 +212,10 @@ def find_journeys(source_lat, source_lng, dest_lat, dest_lng, radius_km=1.5):
                                         "to_name": start_stop.name,
                                         "distance_km": round(d_start, 2),
                                         "duration_mins": round(d_start * 12, 1),
+                                        "start_lat": source_lat,
+                                        "start_lng": source_lng,
+                                        "end_lat": start_stop.latitude,
+                                        "end_lng": start_stop.longitude,
                                         "instruction": f"Walk {round(d_start * 1000)}m to {start_stop.name} bus stop."
                                     },
                                     {
@@ -211,12 +227,20 @@ def find_journeys(source_lat, source_lng, dest_lat, dest_lng, radius_km=1.5):
                                         "stops_count": stops_1,
                                         "duration_mins": stops_1 * 3,
                                         "fare": fare_1,
+                                        "start_lat": start_stop.latitude,
+                                        "start_lng": start_stop.longitude,
+                                        "end_lat": transfer_stop.latitude,
+                                        "end_lng": transfer_stop.longitude,
                                         "instruction": f"Board {s_rs.route.board_name} ({s_rs.route.operator}) at {start_stop.name}. Ride {stops_1} stops and alight at {transfer_stop.name}."
                                     },
                                     {
                                         "type": "transfer_wait",
                                         "stop_name": transfer_stop.name,
                                         "duration_mins": transfer_delay,
+                                        "start_lat": transfer_stop.latitude,
+                                        "start_lng": transfer_stop.longitude,
+                                        "end_lat": transfer_stop.latitude,
+                                        "end_lng": transfer_stop.longitude,
                                         "instruction": f"Transfer at {transfer_stop.name}. Wait approx. 10 minutes for connecting bus."
                                     },
                                     {
@@ -228,6 +252,10 @@ def find_journeys(source_lat, source_lng, dest_lat, dest_lng, radius_km=1.5):
                                         "stops_count": stops_2,
                                         "duration_mins": stops_2 * 3,
                                         "fare": fare_2,
+                                        "start_lat": transfer_stop.latitude,
+                                        "start_lng": transfer_stop.longitude,
+                                        "end_lat": end_stop.latitude,
+                                        "end_lng": end_stop.longitude,
                                         "instruction": f"Board {e_rs.route.board_name} ({e_rs.route.operator}) at {transfer_stop.name}. Ride {stops_2} stops and alight at {end_stop.name}."
                                     },
                                     {
@@ -236,6 +264,10 @@ def find_journeys(source_lat, source_lng, dest_lat, dest_lng, radius_km=1.5):
                                         "to_name": "Destination Location",
                                         "distance_km": round(d_end, 2),
                                         "duration_mins": round(d_end * 12, 1),
+                                        "start_lat": end_stop.latitude,
+                                        "start_lng": end_stop.longitude,
+                                        "end_lat": dest_lat,
+                                        "end_lng": dest_lng,
                                         "instruction": f"Walk {round(d_end * 1000)}m from {end_stop.name} to destination."
                                     }
                                 ]

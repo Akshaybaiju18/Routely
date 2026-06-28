@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as ll;
 import '../../domain/models.dart';
 
 class JourneyDetailScreen extends StatefulWidget {
@@ -11,11 +12,9 @@ class JourneyDetailScreen extends StatefulWidget {
 }
 
 class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
-  GoogleMapController? _mapController;
-  bool _useMockMap = false;
-
-  final Set<Marker> _markers = {};
-  final Set<Polyline> _polylines = {};
+  final List<Marker> _markers = [];
+  final List<Polyline> _polylines = [];
+  ll.LatLng _centerPoint = const ll.LatLng(9.9880, 76.3000); // Kochi Kaloor default
 
   @override
   void initState() {
@@ -24,53 +23,72 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
   }
 
   void _loadMapDetails() {
-    // Generate Markers and Polylines based on segments
-    List<LatLng> busPoints = [];
-    List<LatLng> walkPoints = [];
-
-    // Let's mock coordinate positions based on stops or draw lines
-    // In a production app, stops coordinates will come from the Stop model
-    // Here we extract what we can or fall back to mock offsets
-    LatLng startLatLng = const LatLng(9.9931, 76.3575); // Kakkanad approx
-    LatLng endLatLng = const LatLng(9.9670, 76.2430); // Fort Kochi approx
-
-    _markers.add(Marker(
-      markerId: const MarkerId('start'),
-      position: startLatLng,
-      infoWindow: const InfoWindow(title: 'Start Location'),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-    ));
-
-    _markers.add(Marker(
-      markerId: const MarkerId('end'),
-      position: endLatLng,
-      infoWindow: const InfoWindow(title: 'Destination Location'),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-    ));
-
-    // Simple polylines connecting the steps
-    List<LatLng> allPoints = [startLatLng];
-
-    final busSegments = widget.option.segments.where((s) => s.type == 'bus').toList();
-    if (busSegments.isNotEmpty) {
-      // Adding dummy points in between for mock visual mapping representation
-      LatLng midpoint1 = const LatLng(9.9880, 76.3000); // Kaloor Stop
-      _markers.add(Marker(
-        markerId: const MarkerId('stop_mid'),
-        position: midpoint1,
-        infoWindow: InfoWindow(title: busSegments[0].boardStop ?? 'Bus Stop'),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-      ));
-      allPoints.add(midpoint1);
+    _markers.clear();
+    _polylines.clear();
+    
+    List<ll.LatLng> pathPoints = [];
+    
+    for (int i = 0; i < widget.option.segments.length; i++) {
+      final segment = widget.option.segments[i];
+      
+      if (segment.startLat != null && segment.startLng != null) {
+        final startPt = ll.LatLng(segment.startLat!, segment.startLng!);
+        pathPoints.add(startPt);
+        
+        // Add start marker
+        if (i == 0) {
+          _markers.add(
+            Marker(
+              point: startPt,
+              width: 40,
+              height: 40,
+              child: const Icon(Icons.my_location, color: Colors.teal, size: 30),
+            ),
+          );
+        } else if (segment.type == 'bus') {
+          _markers.add(
+            Marker(
+              point: startPt,
+              width: 40,
+              height: 40,
+              child: const Icon(Icons.directions_bus, color: Colors.teal, size: 24),
+            ),
+          );
+        }
+      }
+      
+      if (segment.endLat != null && segment.endLng != null) {
+        final endPt = ll.LatLng(segment.endLat!, segment.endLng!);
+        pathPoints.add(endPt);
+        
+        // Add end marker
+        if (i == widget.option.segments.length - 1) {
+          _markers.add(
+            Marker(
+              point: endPt,
+              width: 40,
+              height: 40,
+              child: const Icon(Icons.location_on, color: Colors.redAccent, size: 32),
+            ),
+          );
+        }
+      }
     }
-    allPoints.add(endLatLng);
-
-    _polylines.add(Polyline(
-      polylineId: const PolylineId('route_path'),
-      points: allPoints,
-      color: Colors.teal,
-      width: 5,
-    ));
+    
+    // Draw connecting paths
+    if (pathPoints.isNotEmpty) {
+      _polylines.add(
+        Polyline(
+          points: pathPoints,
+          color: Colors.teal.shade700,
+          strokeWidth: 5.0,
+        ),
+      );
+      
+      // Compute midpoint to center the map view
+      final midIndex = (pathPoints.length / 2).floor();
+      _centerPoint = pathPoints[midIndex];
+    }
   }
 
   @override
@@ -81,39 +99,30 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
       ),
       body: Column(
         children: [
-          // Map Section (Top)
+          // OpenStreetMap section (Top half)
           Expanded(
             flex: 4,
-            child: Stack(
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: _centerPoint,
+                initialZoom: 13.0,
+              ),
               children: [
-                _useMockMap ? _buildMockMap() : _buildGoogleMap(),
-                // Map Toggle Button for testability
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  child: FloatingActionButton.extended(
-                    heroTag: 'mapToggle',
-                    backgroundColor: Colors.white.withOpacity(0.9),
-                    onPressed: () {
-                      setState(() {
-                        _useMockMap = !_useMockMap;
-                      });
-                    },
-                    icon: Icon(
-                      _useMockMap ? Icons.map : Icons.layers_clear,
-                      color: Colors.teal,
-                    ),
-                    label: Text(
-                      _useMockMap ? 'Use Google Maps' : 'Use Mock Map',
-                      style: const TextStyle(color: Colors.teal),
-                    ),
-                  ),
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.buswise.frontend',
+                ),
+                PolylineLayer(
+                  polylines: _polylines,
+                ),
+                MarkerLayer(
+                  markers: _markers,
                 ),
               ],
             ),
           ),
           
-          // Instructions Section (Bottom)
+          // Instructions Section (Bottom half)
           Expanded(
             flex: 6,
             child: Container(
@@ -199,72 +208,6 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildGoogleMap() {
-    return GoogleMap(
-      initialCameraPosition: const CameraPosition(
-        target: LatLng(9.9880, 76.3000), // Kaloor center
-        zoom: 12,
-      ),
-      markers: _markers,
-      polylines: _polylines,
-      onMapCreated: (controller) {
-        _mapController = controller;
-      },
-    );
-  }
-
-  Widget _buildMockMap() {
-    return Container(
-      color: Colors.teal.shade50,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.map_outlined, size: 80, color: Colors.teal),
-            const SizedBox(height: 12),
-            const Text(
-              'Interactive Mock Map Active',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Visualizing paths without Google Maps API Key.',
-              style: TextStyle(color: Colors.teal.shade800),
-            ),
-            const SizedBox(height: 16),
-            // Mock visualization panel
-            Card(
-              margin: const EdgeInsets.symmetric(horizontal: 32),
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _mockNode('Start', Colors.green),
-                    const Icon(Icons.arrow_forward),
-                    _mockNode('Transit Hub', Colors.orange),
-                    const Icon(Icons.arrow_forward),
-                    _mockNode('Destination', Colors.red),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _mockNode(String label, Color color) {
-    return Column(
-      children: [
-        CircleAvatar(radius: 12, backgroundColor: color),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-      ],
     );
   }
 
